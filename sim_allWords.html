@@ -1,0 +1,523 @@
+//SIM ALL WORDS
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Wordle Solver</title>
+    <!-- <link rel="stylesheet" href="style.css"> -->
+  </head>
+  <body>
+	<script type="text/javascript" src="allowed_words.js"></script>
+	<script type="text/javascript" src="solution_words.js"></script>
+	<script type="text/javascript" src="initial_guess.js"></script>
+	<script type="text/javascript" src="possible_outcomes.js"></script>
+	<script type="text/javascript" src="sim.js"></script>
+<script>
+	let allWords = allowedWords.concat(solutionWords).sort();
+	let maxTheoreticalInfo = Math.log2(1/(1/12973));//2305
+	var solution_num_guesses = [];
+	var num_guesses = 1;
+	var guessed_correct = false;
+	counter = 1;
+	console.log(sim)
+
+
+	var solutionBank = ["cigar","rebut","sissy","humph","awake","blush","focal","evade","naval","serve","heath","dwarf","model","karma","stink","grade","quiet"]//[...solutionWords];
+
+	solutionBank.forEach(solution => {
+		console.log(counter, num_guesses)
+		guessed_correct = false;
+		bestWord = 'tares';
+		var solutionWordsLength = solutionWords.length;
+		num_guesses = 1;
+		maxTheoreticalInfo = Math.log2(1/(1/12973));
+
+// GUESS ALL WORDS 1ST TRY; HARD MODE; REMAINING POSSIBLE UNTIL ACTUAL SOLUTIONS LENGTH <= 2 REST GUESSES (optimized for official wordle aka will miss solutions on clones w/ different banks unless solutionWords > 2 condition is removed)
+//display 1st best guess
+//console.log('I suggest using "tares" as your first guess');
+	//if solutionWords == 1, that's the answer
+	//if solutionWords == 2, equal chance, guess both
+	//if solutionWords > 2, reduce the possible solutions
+	while(solutionWordsLength > 2 && num_guesses < 6) {
+		if(bestWord == solution) {
+			solution_num_guesses.push(num_guesses);
+			guessed_correct = true;
+			break;
+		}
+		// use first guess, show possible 2nd guess
+		nextGuesses = getNextGuesses(num_guesses == 1 ? allWords : nextGuesses, num_guesses == 1 ? initialEntropyAllWords : sortedBestGuesses,solution)
+
+		// second word suggested
+		newSolutionWords = [];
+		nextGuesses.forEach(guess => {
+			if(solutionWords.includes(guess)) {
+				newSolutionWords.push(guess);
+			}
+		});
+		//console.log(newSolutionWords)
+
+		solutionWordsLength = newSolutionWords.length;
+
+		if(solutionWordsLength == 1) {
+			sortedBestGuesses = [...newSolutionWords];
+			break;
+		}
+		else if (solutionWordsLength == 2) {
+			sortedBestGuesses = newSolutionWords;
+			break;
+		}
+
+		sortedBestGuesses = calculateBestNextGuesses(nextGuesses)
+		num_guesses += 1;
+		bestWord = sortedBestGuesses[0].word
+	}
+	//use 6th guess
+	console.log(solution)
+	if(guessed_correct) {
+		return;
+	}
+	if(sortedBestGuesses[0] == solution) {
+		num_guesses +=1;
+		solution_num_guesses.push(num_guesses)
+	}
+	else if(num_guesses < 6) {
+		if(sortedBestGuesses[1] == solution) {
+			num_guesses +=1;
+			solution_num_guesses.push(num_guesses)
+		}
+		else {
+			solution_num_guesses.push('ran out of guesses or error')
+		}
+	}
+	else {
+		solution_num_guesses.push('ran out of guesses or error')
+	}
+	counter +=1;
+	//console.log(counter)
+
+});
+
+console.log(solution_num_guesses)
+
+function getNextGuesses(originalNextGuesses, expectedEntropyWords,solution) {
+	var word = bestWord;//prompt('What word did you enter?')
+	var outcome = getOutcome(solution)//prompt('What was the outcome? (Ex: if the word\'s letters are black, green, black, yellow, yellow; then enter bgbyy)')
+	//console.log(outcome)
+	nextGuesses = [...originalNextGuesses];
+	evnextGuesses = [...originalNextGuesses];
+	originalNextGuessesLength = originalNextGuesses.length;
+
+	[nextGuesses, evnextGuesses] = getNextGuessesForOutcome(word,outcome,nextGuesses,evnextGuesses)
+
+	probability = evnextGuesses.length / originalNextGuessesLength;
+	information = Math.log2(1/probability);
+	//console.log('expected information ', expectedEntropyWords.find(function (obj) {return Object.values(obj).includes(word)}).entropy.toFixed(2));
+	//console.log('actual information ', information.toFixed(2));
+	//console.log('information left', (maxTheoreticalInfo - information).toFixed(2));
+	maxTheoreticalInfo -= information;
+	//console.log(nextGuesses)
+	return nextGuesses
+}
+
+function getOutcome(solution) {
+	outcome = [];
+	for(i=0;i<5;i++) {
+	if (solution.includes(bestWord[i])) { //g or y
+		if(bestWord[i] == solution[i]) { //g
+			outcome[i] = 'g'
+		}
+		else { //y if single, lengthy check if multiple
+			if (bestWord.replace(bestWord[i], '').indexOf(bestWord[i]) < 0) { // no multiples (y)
+				outcome[i] = 'y'
+			}
+			else {
+				solutionMatchesLength = solution.split(bestWord[i]).length - 1;
+				bestWordMatchesLength = bestWord.split(bestWord[i]).length - 1;
+				if( solutionMatchesLength >= bestWordMatchesLength ) { //more in solution than in guess must be y b/c not green and in word
+					outcome[i] = 'y'
+				}
+				else {
+					greens = [];
+					//check for greens in word
+					for(j=0;j<5;j++) {
+						if(solution[j] == bestWord[j]) {
+							greens.push(j)
+						}
+					}
+					tempSolution = solution;
+					tempBestWord = bestWord;
+					greens.forEach(k => {tempSolution = tempSolution.substring(0,k) + '?' + tempSolution.substring(k+1); tempBestWord = tempBestWord.substring(0,k) + '?' + tempBestWord.substring(k+1);});
+					tempSolutionMatchesLength = tempSolution.split(bestWord[i]).length -1;
+					tempBestWordMatchesLength = tempBestWord.split(bestWord[i]).length -1;
+
+					if(tempSolutionMatchesLength == 1){ //only y is first match in guess
+						if(tempBestWord.indexOf(bestWord[i]) == i) {
+							outcome[i] = 'y'
+						}
+						else {
+							outcome[i] = 'b'
+						}
+
+					}
+					else if(tempSolutionMatchesLength == 2) {
+						if(tempBestWord.lastIndexOf(bestWord[i]) == i) {
+							outcome[i] = 'b'
+						}
+						else {
+							outcome[i] = 'y'
+						}
+					}
+					else {
+						outcome[i] = 'b'
+					}
+				}
+			}
+		}
+	}
+	else { //b
+		outcome[i] = 'b'
+	}
+}
+return outcome;
+}
+
+// function getNextGuessesForOutcome(word, outcome, nextGuesses, evnextGuesses) {
+// 	for(i=0; i<5; i++) {
+// 				if(outcome[i] == 'g') {
+// 					nextGuesses = nextGuesses.filter(function(guess) {return guess[i] == word[i]})
+// 					evnextGuesses = evnextGuesses.filter(function(guess) {return guess[i] == word[i]})
+// 				}
+// 				else if(outcome[i] == 'y') {
+// 					nextGuesses = nextGuesses.filter(function(guess) {return guess[i]      !== word[i]
+// 																		&&  (guess[(i+1)%5] == word[i]
+// 																		||   guess[(i+2)%5] == word[i]
+// 																	    ||   guess[(i+3)%5] == word[i]
+// 																		||   guess[(i+4)%5] == word[i])})
+// 					evnextGuesses = evnextGuesses.filter(function(guess) {return guess[i]      !== word[i]
+// 																		&&  (guess[(i+1)%5] == word[i]
+// 																		||   guess[(i+2)%5] == word[i]
+// 																	    ||   guess[(i+3)%5] == word[i]
+// 																		||   guess[(i+4)%5] == word[i])})
+// 				}
+// 				else { // == 'b'
+// 				if(word.replace(word[i], '').indexOf(word[i]) < 0) { //no multiples
+// 					nextGuesses = nextGuesses.filter(function(guess) {return guess[i]       !== word[i]
+// 																		&&   guess[(i+1)%5] !== word[i]
+// 																		&&   guess[(i+2)%5] !== word[i]
+// 																	    &&   guess[(i+3)%5] !== word[i]
+// 																		&&   guess[(i+4)%5] !== word[i]})
+// 				}
+// 				else {
+// 					nextGuesses = checkIfDouble(i, word, outcome, nextGuesses);
+// 				}
+// 				evnextGuesses = evnextGuesses.filter(function(guess) {return guess[i]       !== word[i]
+// 																		&&   guess[(i+1)%5] !== word[i]
+// 																		&&   guess[(i+2)%5] !== word[i]
+// 																	    &&   guess[(i+3)%5] !== word[i]
+// 																		&&   guess[(i+4)%5] !== word[i]})
+// 				}
+// 			}
+// 			return [nextGuesses, evnextGuesses];
+// }
+
+// function calculateBestNextGuesses(nextGuesses) {
+// 	// calculate best 2nd guess
+// 	nextGuessesForWords = [];
+// 	//counter = 0;
+// 	bestGuesses = [];
+// 	originalNextGuesses = [...nextGuesses];
+// 	//console.log(nextGuesses)
+// 	nextGuessesLength = nextGuesses.length;
+// 	nextGuesses.forEach(word => { //for each word
+// 		nextGuessesForPossibleOutcomes = [];
+// 		expectedValue = [];
+// 		entropy = [];
+// 		//TODO: can reduce possibleOutcomes
+// 		possibleOutcomes.forEach(outcome => { //for each outcome
+// 			nextGuesses = [...originalNextGuesses];
+// 			evnextGuesses = [...originalNextGuesses];
+// 			[nextGuesses, evnextGuesses] = getNextGuessesForOutcome(word,outcome,nextGuesses,evnextGuesses)
+
+// 			//get p(x) for each outcome
+// 			probability = evnextGuesses.length / nextGuessesLength;
+// 			if (probability) {
+// 			// get info for each outcome
+// 			information = Math.log2(1/probability);
+// 			// part of expected value
+// 			ev = probability * information;
+// 			expectedValue.push(ev);
+// 			}
+// 			nextGuessesForPossibleOutcomes.push(nextGuesses); //for specific word, all possible outcomes
+// 		})
+// 		//entropy
+// 		e = expectedValue.reduce(getSum,0);
+
+// 		function getSum(total, num) {
+// 			return total + num;
+// 		}
+// 		entropy.push(e);
+// 		nextGuessesForWords.push(nextGuessesForPossibleOutcomes); // aggregate above
+// 		//counter= counter+1;
+// 		//console.log(counter)
+// 		bestGuesses.push({word: word, entropy: e})
+// 	});
+
+// 	var sortedBestGuesses = bestGuesses.slice(0);
+// 	sortedBestGuesses.sort(function(x,y) {
+// 		a = x.entropy;
+// 		b = y.entropy;
+// 		return a < b ? 1 : a > b ? -1 : 0;
+// 	});
+
+// 	if (num_guesses == 5) {
+// 		sortedBestGuesses = sortedBestGuesses.filter(function (obj) {return solutionWords.includes(obj.word) })
+// 	}
+// 	//console.log(sortedBestGuesses)
+// 	console.log(sortedBestGuesses[0])
+
+// 	return sortedBestGuesses;
+// }
+
+function checkIfDouble(i, word, outcome, nextGuesses) {
+	green_indexes = [];
+	if ( word[i] == word[(i+1)%5]  &&  outcome[(i+1)%5] == 'g')
+	green_indexes.push((i+1)%5)
+	//no letter except at index i+1
+	if (word[i] == word[(i+2)%5]  &&  outcome[(i+2)%5] == 'g')
+	green_indexes.push((i+2)%5)
+	//no letter except at index i+2
+	if (word[i] == word[(i+3)%5]  &&  outcome[(i+3)%5] == 'g')
+	green_indexes.push((i+3)%5)
+	//no letter except at index i+3
+	if (word[i] == word[(i+4)%5]  &&  outcome[(i+4)%5] == 'g')
+	green_indexes.push((i+4)%5)
+	//no letter except at index i+4
+
+	yellow_indexes = [];
+	if ( word[i] == word[(i+1)%5]  &&  outcome[(i+1)%5] == 'y')
+	yellow_indexes.push((i+1)%5)
+	if ( word[i] == word[(i+2)%5]  &&  outcome[(i+2)%5] == 'y')
+	yellow_indexes.push((i+2)%5)
+
+	if ( word[i] == word[(i+3)%5]  &&  outcome[(i+3)%5] == 'y')
+	yellow_indexes.push((i+3)%5)
+
+	if ( word[i] == word[(i+4)%5]  &&  outcome[(i+4)%5] == 'y')
+	yellow_indexes.push((i+4)%5)
+
+	if(!yellow_indexes.length) { //if no yellows, black is nowhere but in green spot
+			all_indexes = [0,1,2,3,4]
+			all_indexes = all_indexes.filter(function (index) {return green_indexes.indexOf(index) < 0});
+			all_indexes.forEach(index => {
+				nextGuesses = nextGuesses.filter(function(guess) {return guess[index] != word[i]});
+			});
+	}
+	else { //yellows exist, possibly greens; black is only guaranteed missing in specific spot
+			nextGuesses = nextGuesses.filter(function(guess) {return guess[i] != word[i]});
+	}
+
+	return nextGuesses;
+}
+// GUESS ALL WORDS 1ST TRY; EASY MODE; ANY POSSIBLE OR SOLUTION WORDS AFTER (optimized for official wordle or clones w/ different solution bank)
+// takes way too long (~30 mins per guess)
+
+// GUESS ALL WORDS 1ST TRY; EASY MODE; ANY SOLUTION WORDS AFTER (optimized for official wordle)
+// takes ~2 mins per guess
+// while(solutionWordsLength > 2 && num_guesses < 6) {
+// 		// use first guess, show possible 2nd guess
+// 		nextGuesses = getNextGuesses(num_guesses == 1 ? allWords : nextGuesses, num_guesses == 1 ? initialEntropyAllWords : sortedBestGuesses)
+
+// 		// second word suggested
+// 		newSolutionWords = [];
+// 		nextGuesses.forEach(guess => {
+// 			if(solutionWords.includes(guess)) {
+// 				newSolutionWords.push(guess);
+// 			}
+// 		});
+// 		console.log(newSolutionWords)
+
+// 		solutionWordsLength = newSolutionWords.length;
+
+// 		if(solutionWordsLength == 1) {
+// 			sortedBestGuesses = newSolutionWords[0];
+// 			break;
+// 		}
+// 		else if (solutionWordsLength == 2) {
+// 			sortedBestGuesses = newSolutionWords;
+// 			break;
+// 		}
+
+// 		sortedBestGuesses = calculateBestNextGuesses(nextGuesses)
+// 		num_guesses += 1;
+// 	}
+// 	//use 6th guess
+// 	console.log(sortedBestGuesses)
+
+// function getNextGuesses(originalNextGuesses, expectedEntropyWords) {
+// 	var word = prompt('What word did you enter?')
+// 	var outcome = prompt('What was the outcome? (Ex: if the word\'s letters are black, green, black, yellow, yellow; then enter bgbyy)')
+// 	nextGuesses = [...originalNextGuesses];
+// 	evnextGuesses = [...originalNextGuesses];
+// 	originalNextGuessesLength = originalNextGuesses.length;
+
+// 	[nextGuesses, evnextGuesses] = getNextGuessesForOutcome(word,outcome,nextGuesses,evnextGuesses)
+
+// 	probability = evnextGuesses.length / originalNextGuessesLength;
+// 	information = Math.log2(1/probability);
+// 	console.log('expected information ', expectedEntropyWords.find(function (obj) {return Object.values(obj).includes(word)}).entropy.toFixed(2));
+// 	console.log('actual information ', information.toFixed(2));
+// 	console.log('information left', (maxTheoreticalInfo - information).toFixed(2));
+// 	maxTheoreticalInfo -= information;
+// 	console.log(nextGuesses)
+// 	return nextGuesses
+// }
+
+function getNextGuessesForOutcome(word, outcome, nextGuesses, evnextGuesses) {
+	allnextGuesses = [...solutionWords]
+	allevnextGuesses = [...solutionWords]
+	for(i=0; i<5; i++) {
+				if(outcome[i] == 'g') {
+					allnextGuesses = allnextGuesses.filter(function(guess) {return guess[i] == word[i]})
+					allevnextGuesses = allevnextGuesses.filter(function(guess) {return guess[i] == word[i]})
+				}
+				else if(outcome[i] == 'y') {
+					allnextGuesses = allnextGuesses.filter(function(guess) {return guess[i]      !== word[i]
+																		&&  (guess[(i+1)%5] == word[i]
+																		||   guess[(i+2)%5] == word[i]
+																	    ||   guess[(i+3)%5] == word[i]
+																		||   guess[(i+4)%5] == word[i])})
+					allevnextGuesses = allevnextGuesses.filter(function(guess) {return guess[i]      !== word[i]
+																		&&  (guess[(i+1)%5] == word[i]
+																		||   guess[(i+2)%5] == word[i]
+																	    ||   guess[(i+3)%5] == word[i]
+																		||   guess[(i+4)%5] == word[i])})
+				}
+				else { // == 'b'
+				if(word.replace(word[i], '').indexOf(word[i]) < 0) { //no multiples
+					allnextGuesses = allnextGuesses.filter(function(guess) {return guess[i]       !== word[i]
+																		&&   guess[(i+1)%5] !== word[i]
+																		&&   guess[(i+2)%5] !== word[i]
+																	    &&   guess[(i+3)%5] !== word[i]
+																		&&   guess[(i+4)%5] !== word[i]})
+				}
+				else {
+					allnextGuesses = checkIfDouble(i, word, outcome, allnextGuesses);
+				}
+				allevnextGuesses = allevnextGuesses.filter(function(guess) {return guess[i]       !== word[i]
+																		&&   guess[(i+1)%5] !== word[i]
+																		&&   guess[(i+2)%5] !== word[i]
+																	    &&   guess[(i+3)%5] !== word[i]
+																		&&   guess[(i+4)%5] !== word[i]})
+				}
+			}
+			nextGuesses = allnextGuesses.filter(function(guess) {return nextGuesses.indexOf(guess) > -1});
+			evnextGuesses = allevnextGuesses.filter(function(guess) {return evnextGuesses.indexOf(guess) > -1});
+			return [nextGuesses, evnextGuesses];
+}
+
+function calculateBestNextGuesses(nextGuesses) {
+	// calculate best 2nd guess
+	nextGuessesForWords = [];
+	counter = 0;
+	bestGuesses = [];
+	originalNextGuesses = [...nextGuesses];
+	console.log(nextGuesses)
+	nextGuessesLength = nextGuesses.length;
+	solutionWords.forEach(word => {
+	//nextGuesses.forEach(word => { //for each word
+		nextGuessesForPossibleOutcomes = [];
+		expectedValue = [];
+		entropy = [];
+		//TODO: can reduce possibleOutcomes
+		possibleOutcomes.forEach(outcome => { //for each outcome
+			nextGuesses = [...originalNextGuesses];
+			evnextGuesses = [...originalNextGuesses];
+			[nextGuesses, evnextGuesses] = getNextGuessesForOutcome(word,outcome,nextGuesses,evnextGuesses)
+
+			//get p(x) for each outcome
+			probability = evnextGuesses.length / nextGuessesLength;
+			if (probability) {
+			// get info for each outcome
+			information = Math.log2(1/probability);
+			// part of expected value
+			ev = probability * information;
+			expectedValue.push(ev);
+			}
+			nextGuessesForPossibleOutcomes.push(nextGuesses); //for specific word, all possible outcomes
+		})
+		//entropy
+		e = expectedValue.reduce(getSum,0);
+
+		function getSum(total, num) {
+			return total + num;
+		}
+		entropy.push(e);
+		nextGuessesForWords.push(nextGuessesForPossibleOutcomes); // aggregate above
+		counter= counter+1;
+		//console.log(counter)
+		bestGuesses.push({word: word, entropy: e})
+	});
+
+	var sortedBestGuesses = bestGuesses.slice(0);
+	sortedBestGuesses.sort(function(x,y) {
+		a = x.entropy;
+		b = y.entropy;
+		return a < b ? 1 : a > b ? -1 : 0;
+	});
+
+	if (num_guesses == 5) {
+		sortedBestGuesses = sortedBestGuesses.filter(function (obj) {return solutionWords.includes(obj.word) })
+	}
+	console.log(sortedBestGuesses)
+	console.log(sortedBestGuesses[0])
+
+	return sortedBestGuesses;
+}
+
+// function checkIfDouble(i, word, outcome, nextGuesses) {
+// 	green_indexes = [];
+// 	if ( word[i] == word[(i+1)%5]  &&  outcome[(i+1)%5] == 'g')
+// 	green_indexes.push((i+1)%5)
+// 	//no letter except at index i+1
+// 	if (word[i] == word[(i+2)%5]  &&  outcome[(i+2)%5] == 'g')
+// 	green_indexes.push((i+2)%5)
+// 	//no letter except at index i+2
+// 	if (word[i] == word[(i+3)%5]  &&  outcome[(i+3)%5] == 'g')
+// 	green_indexes.push((i+3)%5)
+// 	//no letter except at index i+3
+// 	if (word[i] == word[(i+4)%5]  &&  outcome[(i+4)%5] == 'g')
+// 	green_indexes.push((i+4)%5)
+// 	//no letter except at index i+4
+
+// 	yellow_indexes = [];
+// 	if ( word[i] == word[(i+1)%5]  &&  outcome[(i+1)%5] == 'y')
+// 	yellow_indexes.push((i+1)%5)
+// 	if ( word[i] == word[(i+2)%5]  &&  outcome[(i+2)%5] == 'y')
+// 	yellow_indexes.push((i+2)%5)
+
+// 	if ( word[i] == word[(i+3)%5]  &&  outcome[(i+3)%5] == 'y')
+// 	yellow_indexes.push((i+3)%5)
+
+// 	if ( word[i] == word[(i+4)%5]  &&  outcome[(i+4)%5] == 'y')
+// 	yellow_indexes.push((i+4)%5)
+
+// 	if(!yellow_indexes.length) { //if no yellows, black is nowhere but in green spot
+// 			all_indexes = [0,1,2,3,4]
+// 			all_indexes = all_indexes.filter(function (index) {return green_indexes.indexOf(index) < 0});
+// 			all_indexes.forEach(index => {
+// 				nextGuesses = nextGuesses.filter(function(guess) {return guess[index] != word[i]});
+// 			});
+// 	}
+// 	else { //yellows exist, possibly greens; black is only guaranteed missing in specific spot
+// 			nextGuesses = nextGuesses.filter(function(guess) {return guess[i] != word[i]});
+// 	}
+
+// 	return nextGuesses;
+// }
+
+
+
+</script>
+  </body>
+</html>
